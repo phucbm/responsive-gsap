@@ -1,6 +1,5 @@
 import {RefObject} from "react";
 import {useGSAP} from "@gsap/react";
-import {isLoadComplete, isLoadingEnabled, offLoadComplete, onLoadComplete} from "@/components/page-loading-animation";
 import gsap from "gsap";
 
 interface SetupReturn {
@@ -13,12 +12,19 @@ interface MediaQuerySetup {
     setup: (scope: HTMLElement) => SetupReturn;
 }
 
+export interface PageLoadingHandlers {
+    isLoadComplete: () => boolean;
+    isLoadingEnabled: () => boolean;
+    onLoadComplete: (fn: () => void) => void;
+    offLoadComplete: (fn: () => void) => void;
+}
+
 interface UseGSAPSetupOptions {
     scope: RefObject<HTMLElement | null>;
     setup?: (scope: HTMLElement) => SetupReturn;
     mediaQueries?: MediaQuerySetup[];
     observeResize?: string;
-    playAfterLoad?: boolean;
+    playAfterLoad?: boolean | PageLoadingHandlers;
     debug?: boolean;
 }
 
@@ -39,6 +45,20 @@ export function useResponsiveGSAP({
             }
 
             if (debug) console.log("[useResponsiveGSAP] Initializing");
+
+            // Resolve handlers if playAfterLoad is provided as an object
+            let handlers: PageLoadingHandlers | undefined;
+            if (playAfterLoad) {
+                if (typeof playAfterLoad === "object") {
+                    handlers = playAfterLoad as PageLoadingHandlers;
+                } else {
+                    // boolean true used without handlers -> fail fast
+                    throw new Error(
+                        "[useResponsiveGSAP] playAfterLoad is true but no handlers provided. " +
+                        "Use playAfterLoad: { isLoadComplete, isLoadingEnabled, onLoadComplete, offLoadComplete }"
+                    );
+                }
+            }
 
             const mm = gsap.matchMedia();
 
@@ -69,12 +89,15 @@ export function useResponsiveGSAP({
 
                     if (debug) {
                         console.log("[useResponsiveGSAP] Timeline captured:", currentTimelineRef.tl);
-                        console.log("[useResponsiveGSAP] isLoadComplete:", isLoadComplete());
+                        if (handlers) {
+                            console.log("[useResponsiveGSAP] isLoadComplete:", handlers.isLoadComplete());
+                        }
                     }
 
                     // If playAfterLoad is enabled, ensure timeline starts paused
                     if (playAfterLoad && currentTimelineRef.tl) {
-                        if (isLoadingEnabled()) {
+                        // handlers exists because we threw earlier if playAfterLoad was boolean true
+                        if (handlers!.isLoadingEnabled()) {
                             // Loading is enabled, pause and wait for load complete
                             if (!currentTimelineRef.tl.paused()) {
                                 if (debug) console.log("[useResponsiveGSAP] Pausing timeline (playAfterLoad enabled)");
@@ -82,7 +105,7 @@ export function useResponsiveGSAP({
                             }
 
                             // If page is already loaded, play the timeline
-                            if (isLoadComplete()) {
+                            if (handlers!.isLoadComplete()) {
                                 if (debug) console.log("[useResponsiveGSAP] Playing timeline (load already complete)");
                                 currentTimelineRef.tl.play();
                             }
@@ -98,7 +121,7 @@ export function useResponsiveGSAP({
 
             // Helper to setup load complete handler
             const setupLoadCompleteHandler = () => {
-                if (!playAfterLoad) return undefined;
+                if (!playAfterLoad || !handlers) return undefined;
 
                 const handleLoadingComplete = () => {
                     if (debug) console.log("[useResponsiveGSAP] Load complete event fired");
@@ -108,11 +131,11 @@ export function useResponsiveGSAP({
                     }
                 };
 
-                onLoadComplete(handleLoadingComplete);
+                handlers.onLoadComplete(handleLoadingComplete);
 
                 return () => {
                     if (debug) console.log("[useResponsiveGSAP] Cleaning up load complete listener");
-                    offLoadComplete(handleLoadingComplete);
+                    handlers!.offLoadComplete(handleLoadingComplete);
                 };
             };
 
