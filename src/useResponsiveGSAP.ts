@@ -1,3 +1,4 @@
+// useResponsiveGSAP.ts
 import {useGSAP, useGSAPConfig, useGSAPReturn} from "@gsap/react";
 import gsap from "gsap";
 
