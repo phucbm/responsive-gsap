@@ -1,0 +1,188 @@
+import {RefObject} from "react";
+import {useGSAP} from "@gsap/react";
+import {isLoadComplete, isLoadingEnabled, offLoadComplete, onLoadComplete} from "@/components/page-loading-animation";
+import gsap from "gsap";
+
+interface SetupReturn {
+    timeline?: gsap.core.Timeline;
+    cleanup?: () => void;
+}
+
+interface MediaQuerySetup {
+    query: string;
+    setup: (scope: HTMLElement) => SetupReturn;
+}
+
+interface UseGSAPSetupOptions {
+    scope: RefObject<HTMLElement | null>;
+    setup?: (scope: HTMLElement) => SetupReturn;
+    mediaQueries?: MediaQuerySetup[];
+    observeResize?: string;
+    playAfterLoad?: boolean;
+    debug?: boolean;
+}
+
+export function useResponsiveGSAP({
+                                      scope,
+                                      setup,
+                                      mediaQueries,
+                                      observeResize,
+                                      playAfterLoad = false,
+                                      debug = false,
+                                  }: UseGSAPSetupOptions) {
+    useGSAP(
+        () => {
+            const root = scope.current;
+            if (!root) {
+                if (debug) console.log("[useResponsiveGSAP] No root element found");
+                return;
+            }
+
+            if (debug) console.log("[useResponsiveGSAP] Initializing");
+
+            const mm = gsap.matchMedia();
+
+            // Type assertion after null check - root is guaranteed to be HTMLElement here
+            const safeRoot = root as HTMLElement;
+
+            // Track the current timeline reference across setup calls
+            let currentTimelineRef: { tl: gsap.core.Timeline | null } = {tl: null};
+            let userCleanup: (() => void) | undefined;
+
+            // Wrapper that captures timeline and handles playAfterLoad logic
+            function wrapSetup(userSetup: (scope: HTMLElement) => SetupReturn) {
+                return () => {
+                    if (debug) console.log("[useResponsiveGSAP] Running setup");
+
+                    // Clean up previous user cleanup
+                    if (userCleanup) {
+                        if (debug) console.log("[useResponsiveGSAP] Running user cleanup");
+                        userCleanup();
+                    }
+
+                    // Run user's setup and capture return value
+                    const result = userSetup(safeRoot);
+
+                    // Extract timeline and cleanup from result
+                    currentTimelineRef.tl = result.timeline || null;
+                    userCleanup = result.cleanup;
+
+                    if (debug) {
+                        console.log("[useResponsiveGSAP] Timeline captured:", currentTimelineRef.tl);
+                        console.log("[useResponsiveGSAP] isLoadComplete:", isLoadComplete());
+                    }
+
+                    // If playAfterLoad is enabled, ensure timeline starts paused
+                    if (playAfterLoad && currentTimelineRef.tl) {
+                        if (isLoadingEnabled()) {
+                            // Loading is enabled, pause and wait for load complete
+                            if (!currentTimelineRef.tl.paused()) {
+                                if (debug) console.log("[useResponsiveGSAP] Pausing timeline (playAfterLoad enabled)");
+                                currentTimelineRef.tl.pause();
+                            }
+
+                            // If page is already loaded, play the timeline
+                            if (isLoadComplete()) {
+                                if (debug) console.log("[useResponsiveGSAP] Playing timeline (load already complete)");
+                                currentTimelineRef.tl.play();
+                            }
+                        } else {
+                            // If loading animation is disabled, just play immediately
+                            if (debug) console.log("[useResponsiveGSAP] Loading disabled, playing timeline immediately");
+                            // Don't pause, let it play naturally
+                            currentTimelineRef.tl.play();
+                        }
+                    }
+                };
+            }
+
+            // Helper to setup load complete handler
+            const setupLoadCompleteHandler = () => {
+                if (!playAfterLoad) return undefined;
+
+                const handleLoadingComplete = () => {
+                    if (debug) console.log("[useResponsiveGSAP] Load complete event fired");
+                    if (currentTimelineRef.tl) {
+                        if (debug) console.log("[useResponsiveGSAP] Playing timeline on load complete");
+                        currentTimelineRef.tl.play();
+                    }
+                };
+
+                onLoadComplete(handleLoadingComplete);
+
+                return () => {
+                    if (debug) console.log("[useResponsiveGSAP] Cleaning up load complete listener");
+                    offLoadComplete(handleLoadingComplete);
+                };
+            };
+
+            // Setup mediaQueries or single setup
+            if (mediaQueries && mediaQueries.length > 0) {
+                if (debug) console.log("[useResponsiveGSAP] Setting up media queries:", mediaQueries.length);
+
+                mediaQueries.forEach(({query, setup: mqSetup}) => {
+                    mm.add(query, () => {
+                        const wrappedSetup = wrapSetup(mqSetup);
+                        wrappedSetup();
+                        return setupLoadCompleteHandler();
+                    });
+                });
+            } else if (setup) {
+                if (debug) console.log("[useResponsiveGSAP] Setting up with default media query");
+
+                mm.add("(min-width: 0px)", () => {
+                    const wrappedSetup = wrapSetup(setup);
+                    wrappedSetup();
+                    return setupLoadCompleteHandler();
+                });
+            }
+
+            // Setup ResizeObserver
+            let ro: ResizeObserver | null = null;
+
+            if (observeResize) {
+                if (debug) console.log("[useResponsiveGSAP] Setting up ResizeObserver for:", observeResize);
+
+                const elements = safeRoot.querySelectorAll(observeResize);
+
+                if (elements.length > 0) {
+                    // Get the wrapped setup from the appropriate source
+                    const setupToRun = mediaQueries && mediaQueries.length > 0
+                        ? wrapSetup(mediaQueries[0].setup) // Use first media query's setup
+                        : setup
+                            ? wrapSetup(setup)
+                            : null;
+
+                    if (setupToRun) {
+                        ro = new ResizeObserver(() => {
+                            if (debug) console.log("[useResponsiveGSAP] Resize detected, re-running setup");
+                            setupToRun();
+                        });
+
+                        elements.forEach((el) => ro!.observe(el));
+
+                        if (debug) console.log("[useResponsiveGSAP] Observing", elements.length, "elements");
+                    }
+                } else {
+                    if (debug) console.log("[useResponsiveGSAP] No elements found for selector:", observeResize);
+                }
+            }
+
+            // Cleanup
+            return () => {
+                if (debug) console.log("[useResponsiveGSAP] Cleaning up");
+
+                mm.revert();
+
+                if (ro) {
+                    ro.disconnect();
+                }
+
+                if (userCleanup) {
+                    userCleanup();
+                }
+            };
+        },
+        {scope}
+    );
+}
