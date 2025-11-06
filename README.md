@@ -1,5 +1,4 @@
-# responsive-gsap
-A TypeScript utility package
+# useResponsiveGSAP
 
 [![npm version](https://badgen.net/npm/v/responsive-gsap?icon=npm)](https://www.npmjs.com/package/responsive-gsap)
 [![npm downloads](https://badgen.net/npm/dm/responsive-gsap?icon=npm)](https://www.npmjs.com/package/responsive-gsap)
@@ -7,22 +6,16 @@ A TypeScript utility package
 [![github stars](https://badgen.net/github/stars/phucbm/responsive-gsap?icon=github)](https://github.com/phucbm/responsive-gsap/)
 [![github license](https://badgen.net/github/license/phucbm/responsive-gsap?icon=github)](https://github.com/phucbm/responsive-gsap/blob/main/LICENSE)
 
-## 🚀 Quick Start
+A thin, powerful wrapper around [`useGSAP`](https://gsap.com/resources/React/#usegsap-hook-) that adds **responsive setup**, **automatic re-initialization**, and **optional “play after load” control** — all while maintaining full compatibility with `useGSAP` best practices and return values.
 
-### Use this template with gen-from (recommended)
-```bash
-# Generate from this template
-npx gen-from npm-utils-template
+## ✨ Features
 
-# Or use interactive mode
-npx gen-from
-
-# Generate in current directory
-npx gen-from npm-utils-template --here
-```
-
-### Or use GitHub's "Use this template" button
-Click the green "Use this template" button on the [GitHub repository page](https://github.com/phucbm/responsive-gsap).
+* **Drop-in replacement for `useGSAP`** — returns the same value and integrates seamlessly.
+* **Responsive animation setups** via media queries (`gsap.matchMedia`).
+* **Auto re-setup on resize** — re-runs your animation setup when specific elements change size.
+* **Play-after-load control** — delay animation playback until page loading is complete.
+* **Safe cleanup** — guarantees proper `useGSAP` cleanup for timelines, matchMedia, and observers.
+* **Debug mode** — optional console logs for setup, cleanup, and media triggers.
 
 ## Installation
 ```bash
@@ -32,62 +25,218 @@ npm i responsive-gsap
 pnpm add responsive-gsap
 ```
 
-## Usage
-```typescript
-import {myUtilityFunction} from 'responsive-gsap'
-// or
-import myUtilityFunction from 'responsive-gsap'
+## 🚀 Usage
 
-// Basic usage
-const result = myUtilityFunction('your input');
+### 1. Single setup
+
+For simple, non-responsive animations:
+
+```tsx
+import { useResponsiveGSAP } from "responsive-gsap";
+import gsap from "gsap";
+import { useRef } from "react";
+
+export function Example() {
+  const container = useRef<HTMLDivElement>(null);
+
+  useResponsiveGSAP({
+    scope: container,
+    setup: (root) => {
+      const tl = gsap.timeline().from(root.querySelector(".box"), { x: -100, opacity: 0 });
+      return { timeline: tl };
+    },
+  });
+
+  return (
+    <div ref={container}>
+      <div className="box" />
+    </div>
+  );
+}
 ```
 
-## API
-### `myUtilityFunction(input?: any): any`
-Main utility function that processes the input.
+---
 
-**Parameters:**
-- `input` (optional) - The input to process
+### 2. Responsive setups (media queries)
 
-**Returns:**
-- The processed result
+Run different animations per breakpoint with `mediaQueries`:
 
-### `processElement(element: HTMLElement): HTMLElement`
-Function for DOM element processing.
+```tsx
+import { useResponsiveGSAP } from "responsive-gsap";
+import gsap from "gsap";
+import { useRef } from "react";
 
-**Parameters:**
-- `element` - HTML element to process
+export function Example() {
+  const container = useRef<HTMLDivElement>(null);
 
-**Returns:**
-- The processed element
+  useResponsiveGSAP({
+    scope: container,
+    mediaQueries: [
+      {
+        query: "(max-width: 768px)",
+        setup: (root) => ({
+          timeline: gsap.from(root.querySelector(".box"), { x: -50 }),
+        }),
+      },
+      {
+        query: "(min-width: 769px)",
+        setup: (root) => ({
+          timeline: gsap.from(root.querySelector(".box"), { x: 100 }),
+        }),
+      },
+    ],
+  });
 
-## Development
-```bash
-# Install dependencies
-pnpm install
-
-# Run tests
-pnpm test
-
-# Build the package
-pnpm run build
-
-# Run tests in watch mode
-pnpm run test:watch
+  return (
+    <div ref={container}>
+      <div className="box" />
+    </div>
+  );
+}
 ```
 
-## Automated Workflows
-```
-┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
-│ DEPENDABOT  │───▶│    TEST     │───▶│   RELEASE   │───▶│   PUBLISH   │
-└─────────────┘    └─────────────┘    └─────────────┘    └─────────────┘
+Each setup cleans up automatically when the media condition changes.
+
+---
+
+### 3. Observe element resize
+
+Re-run animation setup when a target element’s size changes:
+
+```tsx
+import { useResponsiveGSAP } from "responsive-gsap";
+import gsap from "gsap";
+import { useRef } from "react";
+
+export function Example() {
+  const container = useRef<HTMLDivElement>(null);
+
+  useResponsiveGSAP({
+    scope: container,
+    setup: (root) => ({
+      timeline: gsap.from(root.querySelector(".box"), { scale: 0.5 }),
+    }),
+    observeResize: ".box",
+  });
+
+  return (
+    <div ref={container}>
+      <div className="box" />
+    </div>
+  );
+}
 ```
 
-This repository uses automated dependency management and publishing:
-- **📦 Dependabot** - Creates PRs for dependency updates (daily for npm, weekly for actions)
-- **🧪 Test PR Action** - Auto-tests and merges passing Dependabot PRs with comment feedback  
-- **🚀 Dependabot Release Action** - Creates releases with patch version bumps when dependencies merge
-- **📤 Publish NPM Action** - Builds and publishes to npm registry when releases are created
+Useful for dynamic layouts or fluid containers.
+
+---
+
+### 4. Play-after-load (deferred animation)
+
+Pause animation until a loading process completes:
+
+```tsx
+import { useResponsiveGSAP } from "responsive-gsap";
+import gsap from "gsap";
+import { useRef } from "react";
+
+export function Example() {
+  const container = useRef<HTMLDivElement>(null);
+
+  const loadingHandlers = {
+    isLoadComplete: () => loadState === "done",
+    isLoadingEnabled: () => true,
+    onLoadComplete: (cb: () => void) => window.addEventListener("load", cb),
+    offLoadComplete: (cb: () => void) => window.removeEventListener("load", cb),
+  };
+
+  useResponsiveGSAP({
+    scope: container,
+    setup: (root) => ({
+      timeline: gsap.timeline().from(root.querySelector(".box"), { y: 50, opacity: 0 }),
+    }),
+    playAfterLoad: loadingHandlers,
+  });
+
+  return (
+    <div ref={container}>
+      <div className="box" />
+    </div>
+  );
+}
+```
+
+---
+
+## ⚙️ API
+
+| Option                           | Type                                                                              | Description                                             |
+| -------------------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| `scope`                          | `RefObject<Element> \| Element \| string`                                         | Root for `useGSAP`, same as original hook.              |
+| `setup`                          | `(root: HTMLElement) => { timeline?: gsap.core.Timeline; cleanup?: () => void; }` | Defines animation logic.                                |
+| `mediaQueries`                   | `{ query: string; setup: Setup; }[]`                                              | Responsive setups using CSS-like media queries.         |
+| `observeResize`                  | `string`                                                                          | Selector for elements to observe with `ResizeObserver`. |
+| `playAfterLoad`                  | `boolean \| PageLoadingHandlers`                                                  | Delay timeline playback until load completes.           |
+| `debug`                          | `boolean`                                                                         | Enables verbose console logs.                           |
+| `dependencies`, `revertOnUpdate` | —                                                                                 | Passed through to `useGSAP`.                            |
+
+---
+
+## 🧩 Notes
+
+* `useResponsiveGSAP` **inherits all behavior from** `useGSAP`, including lifecycle and scope handling.
+* Always return `{ timeline, cleanup }` from your setup for best control.
+* Media query and resize-based setups clean up correctly without manual handling.
+
+---
+
+## 🧠 Example integration
+
+A responsive hero animation that waits for page load:
+
+```tsx
+import { useResponsiveGSAP } from "responsive-gsap";
+import gsap from "gsap";
+import { useRef } from "react";
+
+export function Example() {
+  const heroRef = useRef<HTMLDivElement>(null);
+
+  const loadingHandlers = {
+    isLoadComplete: () => document.readyState === "complete",
+    isLoadingEnabled: () => true,
+    onLoadComplete: (cb: () => void) => window.addEventListener("load", cb),
+    offLoadComplete: (cb: () => void) => window.removeEventListener("load", cb),
+  };
+
+  useResponsiveGSAP({
+    scope: heroRef,
+    mediaQueries: [
+      {
+        query: "(max-width: 768px)",
+        setup: (root) => ({
+          timeline: gsap.from(root.querySelector(".hero-title"), { y: 40, opacity: 0 }),
+        }),
+      },
+      {
+        query: "(min-width: 769px)",
+        setup: (root) => ({
+          timeline: gsap.from(root.querySelector(".hero-title"), { x: -100, opacity: 0 }),
+        }),
+      },
+    ],
+    playAfterLoad: loadingHandlers,
+    observeResize: ".hero-title",
+    debug: true,
+  });
+
+  return (
+    <div ref={heroRef}>
+      <h1 className="hero-title">Responsive GSAP</h1>
+    </div>
+  );
+}
+```
 
 ## License
 MIT © [phucbm](https://github.com/phucbm)
