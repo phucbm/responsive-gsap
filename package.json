@@ -1,6 +1,6 @@
 {
   "name": "responsive-gsap",
-  "version": "1.0.1",
+  "version": "0.0.1",
   "description": "A TypeScript utility package",
   "type": "module",
   "main": "dist/index.js",
@@ -14,7 +14,6 @@
   "scripts": {
     "build": "pnpm run clean && tsup",
     "clean": "rm -rf dist",
-    "test": "jest",
     "test:watch": "jest --watch",
     "prepublishOnly": "pnpm run build"
   },
