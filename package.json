@@ -1,7 +1,7 @@
 {
   "name": "responsive-gsap",
   "version": "0.0.0",
-  "description": "A TypeScript utility package",
+  "description": "A React hook that extends useGSAP with responsive media queries, resize observation, and load-controlled playback.",
   "type": "module",
   "main": "dist/index.js",
   "module": "dist/index.js",
@@ -19,7 +19,8 @@
   },
   "keywords": [
     "typescript",
-    "utility",
+    "use-gsap",
+    "react-hook",
     "javascript",
     "responsive-gsap"
   ],
