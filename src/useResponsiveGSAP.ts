@@ -1,16 +1,12 @@
-import {RefObject} from "react";
-import {useGSAP} from "@gsap/react";
+import {useGSAP, useGSAPConfig, useGSAPReturn} from "@gsap/react";
 import gsap from "gsap";
 
-interface SetupReturn {
+gsap.registerPlugin(useGSAP);
+
+type Setup = (root: HTMLElement) => {
     timeline?: gsap.core.Timeline;
     cleanup?: () => void;
-}
-
-interface MediaQuerySetup {
-    query: string;
-    setup: (scope: HTMLElement) => SetupReturn;
-}
+};
 
 export interface PageLoadingHandlers {
     isLoadComplete: () => boolean;
@@ -19,10 +15,9 @@ export interface PageLoadingHandlers {
     offLoadComplete: (fn: () => void) => void;
 }
 
-interface UseGSAPSetupOptions {
-    scope: RefObject<HTMLElement | null>;
-    setup?: (scope: HTMLElement) => SetupReturn;
-    mediaQueries?: MediaQuerySetup[];
+interface useResponsiveGSAPConfig extends useGSAPConfig {
+    setup?: Setup;
+    mediaQueries?: { query: string; setup: Setup; }[];
     observeResize?: string;
     playAfterLoad?: boolean | PageLoadingHandlers;
     debug?: boolean;
@@ -30,17 +25,20 @@ interface UseGSAPSetupOptions {
 
 export function useResponsiveGSAP({
                                       scope,
+                                      dependencies,
+                                      revertOnUpdate,
                                       setup,
                                       mediaQueries,
                                       observeResize,
                                       playAfterLoad = false,
                                       debug = false,
-                                  }: UseGSAPSetupOptions) {
-    useGSAP(
+                                  }: useResponsiveGSAPConfig): useGSAPReturn {
+    return useGSAP(
         () => {
-            const root = scope.current;
+            const root = getRoot(scope);
+
             if (!root) {
-                if (debug) console.log("[useResponsiveGSAP] No root element found");
+                console.warn("[useResponsiveGSAP] No root element found");
                 return;
             }
 
@@ -70,7 +68,7 @@ export function useResponsiveGSAP({
             let userCleanup: (() => void) | undefined;
 
             // Wrapper that captures timeline and handles playAfterLoad logic
-            function wrapSetup(userSetup: (scope: HTMLElement) => SetupReturn) {
+            function wrapSetup(userSetup: Setup) {
                 return () => {
                     if (debug) console.log("[useResponsiveGSAP] Running setup");
 
@@ -206,6 +204,29 @@ export function useResponsiveGSAP({
                 }
             };
         },
-        {scope}
+        {scope, dependencies, revertOnUpdate}
     );
+}
+
+function getRoot(scope: useGSAPConfig['scope']) {
+    // resolve `scope` (which may be ReactRef | Element | string) to an HTMLElement | null
+    let root: HTMLElement | null = null;
+
+    if (!scope) {
+        console.warn("[useResponsiveGSAP] No scope provided");
+        return;
+    }
+
+    if (typeof scope === "object" && "current" in scope) {
+        // React ref
+        root = (scope as any).current as HTMLElement | null;
+    } else if (typeof scope === "string") {
+        // selector string -> resolve in DOM (guard for SSR)
+        root = typeof document !== "undefined" ? (document.querySelector(scope) as HTMLElement | null) : null;
+    } else if (scope instanceof Element) {
+        // direct Element
+        root = scope as HTMLElement;
+    }
+
+    return root;
 }
