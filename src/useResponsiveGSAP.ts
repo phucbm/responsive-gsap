@@ -176,9 +176,19 @@ export function useResponsiveGSAP({
                             : null;
 
                     if (setupToRun) {
+                        let resizeTimeout: ReturnType<typeof setTimeout> | null = null;
+
                         ro = new ResizeObserver(() => {
-                            if (debug) console.log("[useResponsiveGSAP] Resize detected, re-running setup");
-                            setupToRun();
+                            // Clear previous timeout to debounce
+                            if (resizeTimeout) {
+                                clearTimeout(resizeTimeout);
+                            }
+
+                            // Wait for resize to settle before re-running setup
+                            resizeTimeout = setTimeout(() => {
+                                if (debug) console.log("[useResponsiveGSAP] Resize detected, re-running setup");
+                                setupToRun();
+                            }, 150); // 150ms debounce
                         });
 
                         elements.forEach((el) => ro!.observe(el));
