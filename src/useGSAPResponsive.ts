@@ -1,13 +1,15 @@
-// useResponsiveGSAP.ts
+// useGSAPResponsive.ts
 import {useGSAP, useGSAPConfig, useGSAPReturn} from "@gsap/react";
 import gsap from "gsap";
 
 gsap.registerPlugin(useGSAP);
 
-type Setup = (root: HTMLElement) => {
+type ContextSafeFunc = <T extends Function>(func: T) => T;
+
+type Setup = (root: HTMLElement, contextSafe: ContextSafeFunc) => {
     timeline?: gsap.core.Timeline;
     cleanup?: () => void;
-};
+} | void;
 
 export interface PageLoadingHandlers {
     isLoadComplete: () => boolean;
@@ -16,34 +18,48 @@ export interface PageLoadingHandlers {
     offLoadComplete: (fn: () => void) => void;
 }
 
-interface useResponsiveGSAPConfig extends useGSAPConfig {
-    setup?: Setup;
-    mediaQueries?: { query: string; setup: Setup; }[];
+interface useGSAPResponsiveConfig extends useGSAPConfig {
     observeResize?: string;
     playAfterLoad?: boolean | PageLoadingHandlers;
     debug?: boolean;
 }
 
-export function useResponsiveGSAP({
-                                      scope,
-                                      dependencies,
-                                      revertOnUpdate,
-                                      setup,
-                                      mediaQueries,
-                                      observeResize,
-                                      playAfterLoad = false,
-                                      debug = false,
-                                  }: useResponsiveGSAPConfig): useGSAPReturn {
+export function useGSAPResponsive(
+    setupOrQueries: Setup | Array<{ query: string; setup: Setup }>,
+    config?: useGSAPResponsiveConfig
+): useGSAPReturn {
+    const {
+        scope,
+        dependencies,
+        revertOnUpdate,
+        observeResize,
+        playAfterLoad = false,
+        debug = false,
+    } = config || {};
     return useGSAP(
-        () => {
+        (context, contextSafe) => {
             const root = getRoot(scope);
 
             if (!root) {
-                console.warn("[useResponsiveGSAP] No root element found");
+                console.warn("[useGSAPResponsive] No root element found");
                 return;
             }
 
-            if (debug) console.log("[useResponsiveGSAP] Initializing");
+            if (debug) console.log("[useGSAPResponsive] Initializing");
+
+            // Ensure contextSafe is defined (should always be provided by useGSAP)
+            if (!contextSafe) {
+                console.error("[useGSAPResponsive] contextSafe not provided by useGSAP");
+                return;
+            }
+
+            // Capture contextSafe as non-nullable for closure
+            const safeContextSafe: ContextSafeFunc = contextSafe;
+
+            // Determine if we have media queries or a single setup
+            const isMediaQueryMode = Array.isArray(setupOrQueries);
+            const mediaQueries = isMediaQueryMode ? setupOrQueries : null;
+            const singleSetup = !isMediaQueryMode ? setupOrQueries : null;
 
             // Resolve handlers if playAfterLoad is provided as an object
             let handlers: PageLoadingHandlers | undefined;
@@ -53,7 +69,7 @@ export function useResponsiveGSAP({
                 } else {
                     // boolean true used without handlers -> fail fast
                     throw new Error(
-                        "[useResponsiveGSAP] playAfterLoad is true but no handlers provided. " +
+                        "[useGSAPResponsive] playAfterLoad is true but no handlers provided. " +
                         "Use playAfterLoad: { isLoadComplete, isLoadingEnabled, onLoadComplete, offLoadComplete }"
                     );
                 }
@@ -71,25 +87,30 @@ export function useResponsiveGSAP({
             // Wrapper that captures timeline and handles playAfterLoad logic
             function wrapSetup(userSetup: Setup) {
                 return () => {
-                    if (debug) console.log("[useResponsiveGSAP] Running setup");
+                    if (debug) console.log("[useGSAPResponsive] Running setup");
 
                     // Clean up previous user cleanup
                     if (userCleanup) {
-                        if (debug) console.log("[useResponsiveGSAP] Running user cleanup");
+                        if (debug) console.log("[useGSAPResponsive] Running user cleanup");
                         userCleanup();
                     }
 
-                    // Run user's setup and capture return value
-                    const result = userSetup(safeRoot);
+                    // Run user's setup and capture return value, passing contextSafe
+                    const result = userSetup(safeRoot, safeContextSafe);
 
-                    // Extract timeline and cleanup from result
-                    currentTimelineRef.tl = result.timeline || null;
-                    userCleanup = result.cleanup;
+                    // Extract timeline and cleanup from result (if result is not void)
+                    if (result) {
+                        currentTimelineRef.tl = result.timeline || null;
+                        userCleanup = result.cleanup;
+                    } else {
+                        currentTimelineRef.tl = null;
+                        userCleanup = undefined;
+                    }
 
                     if (debug) {
-                        console.log("[useResponsiveGSAP] Timeline captured:", currentTimelineRef.tl);
+                        console.log("[useGSAPResponsive] Timeline captured:", currentTimelineRef.tl);
                         if (handlers) {
-                            console.log("[useResponsiveGSAP] isLoadComplete:", handlers.isLoadComplete());
+                            console.log("[useGSAPResponsive] isLoadComplete:", handlers.isLoadComplete());
                         }
                     }
 
@@ -99,18 +120,18 @@ export function useResponsiveGSAP({
                         if (handlers!.isLoadingEnabled()) {
                             // Loading is enabled, pause and wait for load complete
                             if (!currentTimelineRef.tl.paused()) {
-                                if (debug) console.log("[useResponsiveGSAP] Pausing timeline (playAfterLoad enabled)");
+                                if (debug) console.log("[useGSAPResponsive] Pausing timeline (playAfterLoad enabled)");
                                 currentTimelineRef.tl.pause();
                             }
 
                             // If page is already loaded, play the timeline
                             if (handlers!.isLoadComplete()) {
-                                if (debug) console.log("[useResponsiveGSAP] Playing timeline (load already complete)");
+                                if (debug) console.log("[useGSAPResponsive] Playing timeline (load already complete)");
                                 currentTimelineRef.tl.play();
                             }
                         } else {
                             // If loading animation is disabled, just play immediately
-                            if (debug) console.log("[useResponsiveGSAP] Loading disabled, playing timeline immediately");
+                            if (debug) console.log("[useGSAPResponsive] Loading disabled, playing timeline immediately");
                             // Don't pause, let it play naturally
                             currentTimelineRef.tl.play();
                         }
@@ -123,9 +144,9 @@ export function useResponsiveGSAP({
                 if (!playAfterLoad || !handlers) return undefined;
 
                 const handleLoadingComplete = () => {
-                    if (debug) console.log("[useResponsiveGSAP] Load complete event fired");
+                    if (debug) console.log("[useGSAPResponsive] Load complete event fired");
                     if (currentTimelineRef.tl) {
-                        if (debug) console.log("[useResponsiveGSAP] Playing timeline on load complete");
+                        if (debug) console.log("[useGSAPResponsive] Playing timeline on load complete");
                         currentTimelineRef.tl.play();
                     }
                 };
@@ -133,14 +154,14 @@ export function useResponsiveGSAP({
                 handlers.onLoadComplete(handleLoadingComplete);
 
                 return () => {
-                    if (debug) console.log("[useResponsiveGSAP] Cleaning up load complete listener");
+                    if (debug) console.log("[useGSAPResponsive] Cleaning up load complete listener");
                     handlers!.offLoadComplete(handleLoadingComplete);
                 };
             };
 
             // Setup mediaQueries or single setup
             if (mediaQueries && mediaQueries.length > 0) {
-                if (debug) console.log("[useResponsiveGSAP] Setting up media queries:", mediaQueries.length);
+                if (debug) console.log("[useGSAPResponsive] Setting up media queries:", mediaQueries.length);
 
                 mediaQueries.forEach(({query, setup: mqSetup}) => {
                     mm.add(query, () => {
@@ -149,11 +170,11 @@ export function useResponsiveGSAP({
                         return setupLoadCompleteHandler();
                     });
                 });
-            } else if (setup) {
-                if (debug) console.log("[useResponsiveGSAP] Setting up with default media query");
+            } else if (singleSetup) {
+                if (debug) console.log("[useGSAPResponsive] Setting up with default media query");
 
                 mm.add("(min-width: 0px)", () => {
-                    const wrappedSetup = wrapSetup(setup);
+                    const wrappedSetup = wrapSetup(singleSetup);
                     wrappedSetup();
                     return setupLoadCompleteHandler();
                 });
@@ -163,7 +184,7 @@ export function useResponsiveGSAP({
             let ro: ResizeObserver | null = null;
 
             if (observeResize) {
-                if (debug) console.log("[useResponsiveGSAP] Setting up ResizeObserver for:", observeResize);
+                if (debug) console.log("[useGSAPResponsive] Setting up ResizeObserver for:", observeResize);
 
                 const elements = safeRoot.querySelectorAll(observeResize);
 
@@ -171,8 +192,8 @@ export function useResponsiveGSAP({
                     // Get the wrapped setup from the appropriate source
                     const setupToRun = mediaQueries && mediaQueries.length > 0
                         ? wrapSetup(mediaQueries[0].setup) // Use first media query's setup
-                        : setup
-                            ? wrapSetup(setup)
+                        : singleSetup
+                            ? wrapSetup(singleSetup)
                             : null;
 
                     if (setupToRun) {
@@ -186,23 +207,23 @@ export function useResponsiveGSAP({
 
                             // Wait for resize to settle before re-running setup
                             resizeTimeout = setTimeout(() => {
-                                if (debug) console.log("[useResponsiveGSAP] Resize detected, re-running setup");
+                                if (debug) console.log("[useGSAPResponsive] Resize detected, re-running setup");
                                 setupToRun();
                             }, 150); // 150ms debounce
                         });
 
                         elements.forEach((el) => ro!.observe(el));
 
-                        if (debug) console.log("[useResponsiveGSAP] Observing", elements.length, "elements");
+                        if (debug) console.log("[useGSAPResponsive] Observing", elements.length, "elements");
                     }
                 } else {
-                    if (debug) console.log("[useResponsiveGSAP] No elements found for selector:", observeResize);
+                    if (debug) console.log("[useGSAPResponsive] No elements found for selector:", observeResize);
                 }
             }
 
             // Cleanup
             return () => {
-                if (debug) console.log("[useResponsiveGSAP] Cleaning up");
+                if (debug) console.log("[useGSAPResponsive] Cleaning up");
 
                 mm.revert();
 
@@ -224,7 +245,7 @@ function getRoot(scope: useGSAPConfig['scope']) {
     let root: HTMLElement | null = null;
 
     if (!scope) {
-        console.warn("[useResponsiveGSAP] No scope provided");
+        console.warn("[useGSAPResponsive] No scope provided");
         return;
     }
 
