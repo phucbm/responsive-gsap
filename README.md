@@ -1,4 +1,4 @@
-# useResponsiveGSAP
+# useGSAPResponsive
 
 [![npm version](https://badgen.net/npm/v/responsive-gsap?icon=npm)](https://www.npmjs.com/package/responsive-gsap)
 [![npm downloads](https://badgen.net/npm/dm/responsive-gsap?icon=npm)](https://www.npmjs.com/package/responsive-gsap)
@@ -32,26 +32,23 @@ pnpm add responsive-gsap
 For simple, non-responsive animations:
 
 ```tsx
-import { useResponsiveGSAP } from "responsive-gsap";
+import {useGSAPResponsive} from "responsive-gsap";
 import gsap from "gsap";
-import { useRef } from "react";
+import {useRef} from "react";
 
 export function Example() {
-  const container = useRef<HTMLDivElement>(null);
+    const scope = useRef<HTMLDivElement>(null);
 
-  useResponsiveGSAP({
-    scope: container,
-    setup: (root) => {
-      const tl = gsap.timeline().from(root.querySelector(".box"), { x: -100, opacity: 0 });
-      return { timeline: tl };
-    },
-  });
+    useGSAPResponsive((root) => {
+        const tl = gsap.timeline().from(root.querySelector(".box"), {x: -100, opacity: 0});
+        return {timeline: tl};
+    }, {scope});
 
-  return (
-    <div ref={container}>
-      <div className="box" />
-    </div>
-  );
+    return (
+        <div ref={scope}>
+            <div className="box"/>
+        </div>
+    );
 }
 ```
 
@@ -62,36 +59,33 @@ export function Example() {
 Run different animations per breakpoint with `mediaQueries`:
 
 ```tsx
-import { useResponsiveGSAP } from "responsive-gsap";
+import {useGSAPResponsive} from "responsive-gsap";
 import gsap from "gsap";
-import { useRef } from "react";
+import {useRef} from "react";
 
 export function Example() {
-  const container = useRef<HTMLDivElement>(null);
+    const scope = useRef<HTMLDivElement>(null);
 
-  useResponsiveGSAP({
-    scope: container,
-    mediaQueries: [
-      {
-        query: "(max-width: 768px)",
-        setup: (root) => ({
-          timeline: gsap.from(root.querySelector(".box"), { x: -50 }),
-        }),
-      },
-      {
-        query: "(min-width: 769px)",
-        setup: (root) => ({
-          timeline: gsap.from(root.querySelector(".box"), { x: 100 }),
-        }),
-      },
-    ],
-  });
+    useGSAPResponsive([
+        {
+            query: "(max-width: 768px)",
+            setup: (root) => ({
+                timeline: gsap.from(root.querySelector(".box"), {x: -50}),
+            }),
+        },
+        {
+            query: "(min-width: 769px)",
+            setup: (root) => ({
+                timeline: gsap.from(root.querySelector(".box"), {x: 100}),
+            }),
+        },
+    ], {scope});
 
-  return (
-    <div ref={container}>
-      <div className="box" />
-    </div>
-  );
+    return (
+        <div ref={scope}>
+            <div className="box"/>
+        </div>
+    );
 }
 ```
 
@@ -104,26 +98,28 @@ Each setup cleans up automatically when the media condition changes.
 Re-run animation setup when a target element’s size changes:
 
 ```tsx
-import { useResponsiveGSAP } from "responsive-gsap";
+import {useGSAPResponsive} from "responsive-gsap";
 import gsap from "gsap";
-import { useRef } from "react";
+import {useRef} from "react";
 
 export function Example() {
-  const container = useRef<HTMLDivElement>(null);
+    const scope = useRef<HTMLDivElement>(null);
 
-  useResponsiveGSAP({
-    scope: container,
-    setup: (root) => ({
-      timeline: gsap.from(root.querySelector(".box"), { scale: 0.5 }),
-    }),
-    observeResize: ".box",
-  });
+    useGSAPResponsive(
+        (root) => ({
+            timeline: gsap.from(root.querySelector(".box"), {scale: 0.5}),
+        }),
+        {
+            scope,
+            observeResize: ".box",
+        }
+    );
 
-  return (
-    <div ref={container}>
-      <div className="box" />
-    </div>
-  );
+    return (
+        <div ref={scope}>
+            <div className="box"/>
+        </div>
+    );
 }
 ```
 
@@ -136,55 +132,43 @@ Useful for dynamic layouts or fluid containers.
 Pause animation until a loading process completes:
 
 ```tsx
-import { useResponsiveGSAP } from "responsive-gsap";
+import {useGSAPResponsive} from "responsive-gsap";
 import gsap from "gsap";
-import { useRef } from "react";
+import {useRef} from "react";
 
 export function Example() {
-  const container = useRef<HTMLDivElement>(null);
+    const scope = useRef<HTMLDivElement>(null);
 
-  const loadingHandlers = {
-    isLoadComplete: () => loadState === "done",
-    isLoadingEnabled: () => true,
-    onLoadComplete: (cb: () => void) => window.addEventListener("load", cb),
-    offLoadComplete: (cb: () => void) => window.removeEventListener("load", cb),
-  };
+    const loadingHandlers = {
+        isLoadComplete: () => loadState === "done",
+        isLoadingEnabled: () => true,
+        onLoadComplete: (cb: () => void) => window.addEventListener("load", cb),
+        offLoadComplete: (cb: () => void) => window.removeEventListener("load", cb),
+    };
 
-  useResponsiveGSAP({
-    scope: container,
-    setup: (root) => ({
-      timeline: gsap.timeline().from(root.querySelector(".box"), { y: 50, opacity: 0 }),
-    }),
-    playAfterLoad: loadingHandlers,
-  });
+    useGSAPResponsive(
+        (root) => ({
+            timeline: gsap.timeline().from(root.querySelector(".box"), {y: 50, opacity: 0}),
+        }),
+        {
+            scope,
+            playAfterLoad: loadingHandlers,
+        }
+    );
 
-  return (
-    <div ref={container}>
-      <div className="box" />
-    </div>
-  );
+    return (
+        <div ref={scope}>
+            <div className="box"/>
+        </div>
+    );
 }
 ```
 
 ---
 
-## ⚙️ API
-
-| Option                           | Type                                                                              | Description                                             |
-| -------------------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------- |
-| `scope`                          | `RefObject<Element> \| Element \| string`                                         | Root for `useGSAP`, same as original hook.              |
-| `setup`                          | `(root: HTMLElement) => { timeline?: gsap.core.Timeline; cleanup?: () => void; }` | Defines animation logic.                                |
-| `mediaQueries`                   | `{ query: string; setup: Setup; }[]`                                              | Responsive setups using CSS-like media queries.         |
-| `observeResize`                  | `string`                                                                          | Selector for elements to observe with `ResizeObserver`. |
-| `playAfterLoad`                  | `boolean \| PageLoadingHandlers`                                                  | Delay timeline playback until load completes.           |
-| `debug`                          | `boolean`                                                                         | Enables verbose console logs.                           |
-| `dependencies`, `revertOnUpdate` | —                                                                                 | Passed through to `useGSAP`.                            |
-
----
-
 ## 🧩 Notes
 
-* `useResponsiveGSAP` **inherits all behavior from** `useGSAP`, including lifecycle and scope handling.
+* `useGSAPResponsive` **inherits all behavior from** `useGSAP`, including lifecycle and scope handling.
 * Always return `{ timeline, cleanup }` from your setup for best control.
 * Media query and resize-based setups clean up correctly without manual handling.
 
@@ -195,46 +179,48 @@ export function Example() {
 A responsive hero animation that waits for page load:
 
 ```tsx
-import { useResponsiveGSAP } from "responsive-gsap";
+import {useGSAPResponsive} from "responsive-gsap";
 import gsap from "gsap";
-import { useRef } from "react";
+import {useRef} from "react";
 
 export function Example() {
-  const heroRef = useRef<HTMLDivElement>(null);
+    const scope = useRef<HTMLDivElement>(null);
 
-  const loadingHandlers = {
-    isLoadComplete: () => document.readyState === "complete",
-    isLoadingEnabled: () => true,
-    onLoadComplete: (cb: () => void) => window.addEventListener("load", cb),
-    offLoadComplete: (cb: () => void) => window.removeEventListener("load", cb),
-  };
+    const loadingHandlers = {
+        isLoadComplete: () => document.readyState === "complete",
+        isLoadingEnabled: () => true,
+        onLoadComplete: (cb: () => void) => window.addEventListener("load", cb),
+        offLoadComplete: (cb: () => void) => window.removeEventListener("load", cb),
+    };
 
-  useResponsiveGSAP({
-    scope: heroRef,
-    mediaQueries: [
-      {
-        query: "(max-width: 768px)",
-        setup: (root) => ({
-          timeline: gsap.from(root.querySelector(".hero-title"), { y: 40, opacity: 0 }),
-        }),
-      },
-      {
-        query: "(min-width: 769px)",
-        setup: (root) => ({
-          timeline: gsap.from(root.querySelector(".hero-title"), { x: -100, opacity: 0 }),
-        }),
-      },
-    ],
-    playAfterLoad: loadingHandlers,
-    observeResize: ".hero-title",
-    debug: true,
-  });
+    useGSAPResponsive(
+        [
+            {
+                query: "(max-width: 768px)",
+                setup: (root) => ({
+                    timeline: gsap.from(root.querySelector(".hero-title"), {y: 40, opacity: 0}),
+                }),
+            },
+            {
+                query: "(min-width: 769px)",
+                setup: (root) => ({
+                    timeline: gsap.from(root.querySelector(".hero-title"), {x: -100, opacity: 0}),
+                }),
+            },
+        ],
+        {
+            scope,
+            playAfterLoad: loadingHandlers,
+            observeResize: ".hero-title",
+            debug: true,
+        }
+    );
 
-  return (
-    <div ref={heroRef}>
-      <h1 className="hero-title">Responsive GSAP</h1>
-    </div>
-  );
+    return (
+        <div ref={scope}>
+            <h1 className="hero-title">Responsive GSAP</h1>
+        </div>
+    );
 }
 ```
 

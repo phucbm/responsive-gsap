@@ -1,4 +1,4 @@
 // index.ts
-import {useResponsiveGSAP} from "./useResponsiveGSAP";
+import {useGSAPResponsive} from "./useGSAPResponsive";
 
-export {useResponsiveGSAP};
+export {useGSAPResponsive};
