@@ -1,6 +1,6 @@
 {
   "name": "responsive-gsap",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "description": "A React hook that extends useGSAP with responsive media queries, resize observation, and load-controlled playback.",
   "type": "module",
   "main": "dist/index.js",

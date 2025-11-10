@@ -1,25 +1,24 @@
 import { useGSAPConfig, useGSAPReturn } from '@gsap/react';
 
-type Setup = (root: HTMLElement) => {
+type ContextSafeFunc = <T extends Function>(func: T) => T;
+type Setup = (root: HTMLElement, contextSafe: ContextSafeFunc) => {
     timeline?: gsap.core.Timeline;
     cleanup?: () => void;
-};
+} | void;
 interface PageLoadingHandlers {
     isLoadComplete: () => boolean;
     isLoadingEnabled: () => boolean;
     onLoadComplete: (fn: () => void) => void;
     offLoadComplete: (fn: () => void) => void;
 }
-interface useResponsiveGSAPConfig extends useGSAPConfig {
-    setup?: Setup;
-    mediaQueries?: {
-        query: string;
-        setup: Setup;
-    }[];
+interface useGSAPResponsiveConfig extends useGSAPConfig {
     observeResize?: string;
     playAfterLoad?: boolean | PageLoadingHandlers;
     debug?: boolean;
 }
-declare function useResponsiveGSAP({ scope, dependencies, revertOnUpdate, setup, mediaQueries, observeResize, playAfterLoad, debug, }: useResponsiveGSAPConfig): useGSAPReturn;
+declare function useGSAPResponsive(setupOrQueries: Setup | Array<{
+    query: string;
+    setup: Setup;
+}>, config?: useGSAPResponsiveConfig): useGSAPReturn;
 
-export { useResponsiveGSAP };
+export { useGSAPResponsive };
